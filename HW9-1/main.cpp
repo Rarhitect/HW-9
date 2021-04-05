@@ -67,7 +67,41 @@ void cin_thread()
 
 void cout_thread()
 {
+    using namespace boost::interprocess;
+ 
+    typedef allocator < char, managed_shared_memory::segment_manager > CharAllocator;
+    typedef basic_string < char, std::char_traits<char>, CharAllocator > MyShmString;
+    typedef allocator < MyShmString, managed_shared_memory::segment_manager > StringAllocator;
+    typedef vector < MyShmString, StringAllocator > MyShmStringVector;
     
+    const std::string shared_memory_name = "managed_shared_memory";
+    managed_shared_memory shared_memory(open_only, shared_memory_name.c_str());
+    
+    //Create allocators
+    CharAllocator     charallocator  (shared_memory.get_segment_manager());
+    StringAllocator   stringallocator(shared_memory.get_segment_manager());
+    
+    MyShmStringVector *vector = shared_memory.find < MyShmStringVector > ("vector").first;
+    
+    auto mutex = shared_memory.find < interprocess_mutex > ("mutex").first;
+    auto condition_var = shared_memory.find < interprocess_condition > ("condition_var").first;
+    
+    MyShmString message(charallocator);
+    message = "EXIT_SUCCES";
+    
+    do
+    {
+        std::unique_lock lock(*mutex);
+        
+        condition_var->wait(lock, [vector](){return !vector->empty();});
+        
+        message = vector->back();
+        
+        std::cout << message << std::endl;
+        
+        vector->pop_back();
+    }
+    while(message != "EXIT_SUCCESS");
 }
 
 int main(int argc, const char * argv[])
