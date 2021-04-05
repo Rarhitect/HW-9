@@ -239,6 +239,7 @@
 		2D80E61A261B5B7000D5BFCB /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++17";
 				CODE_SIGN_STYLE = Automatic;
 				HEADER_SEARCH_PATHS = /usr/local/boost_1_75_0/include/;
 				LIBRARY_SEARCH_PATHS = /usr/local/boost_1_75_0/lib/;
@@ -249,6 +250,7 @@
 		2D80E61B261B5B7000D5BFCB /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++17";
 				CODE_SIGN_STYLE = Automatic;
 				HEADER_SEARCH_PATHS = /usr/local/boost_1_75_0/include/;
 				LIBRARY_SEARCH_PATHS = /usr/local/boost_1_75_0/lib/;

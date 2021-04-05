@@ -8,58 +8,86 @@
 #include <iostream>
 #include <thread>
 #include <string>
+#include <vector>
 #include <mutex>
 #include <condition_variable>
+#include <atomic>
 
 #include <boost/interprocess/managed_shared_memory.hpp>
 #include <boost/interprocess/allocators/allocator.hpp>
 #include <boost/interprocess/containers/string.hpp>
 #include <boost/interprocess/containers/vector.hpp>
-#include <boost/interprocess/sync/named_mutex.hpp>
+#include <boost/interprocess/sync/interprocess_mutex.hpp>
+#include <boost/interprocess/sync/interprocess_condition.hpp>
 
-/*
- 
- Необходимо создать два потока.
- 
- Первый поток будет ожидать ввода сообщения пользователем (на операторе ввода), добавлять сообщение в контейнер и пробуждать все ожидающие сообщений потоки через условную переменную.
- 
- Второй поток будет ожидать поступления нового сообщения (на условной переменной), извлекать сообщение и выводить его.
- 
- Оба потока выполняют свои действия в цикле до тех пор, пока пользователь не введет сообщение типа exit, означающее завершение работы текущего клиента.
- 
- */
-
-std::mutex g_mutex;
-std::condition_variable g_condition_var;
-
-void input_thread()
+void cin_thread()
 {
+    using namespace boost::interprocess;
+ 
+    typedef allocator < char, managed_shared_memory::segment_manager > CharAllocator;
+    typedef basic_string < char, std::char_traits<char>, CharAllocator > MyShmString;
+    typedef allocator < MyShmString, managed_shared_memory::segment_manager > StringAllocator;
+    typedef vector < MyShmString, StringAllocator > MyShmStringVector;
     
+    const std::string shared_memory_name = "managed_shared_memory";
+    shared_memory_object::remove(shared_memory_name.c_str());
+    managed_shared_memory shared_memory(open_or_create, shared_memory_name.c_str(), 10000);
+    
+    //Create allocators
+    CharAllocator     charallocator  (shared_memory.get_segment_manager());
+    StringAllocator   stringallocator(shared_memory.get_segment_manager());
+    
+    MyShmStringVector *vector = shared_memory.construct < MyShmStringVector > ("vector")(stringallocator);
+    
+    auto mutex = shared_memory.construct < interprocess_mutex > ("mutex")();
+    auto condition_var = shared_memory.construct < interprocess_condition > ("condition_var")();
+    
+    MyShmString message(charallocator);
+    message = "EXIT_SUCCES";
+    
+    do
+    {
+        std::cin >> message;
+        
+        std::lock_guard < interprocess_mutex > lock(*mutex);
+        
+        vector->push_back(message);
+        
+        condition_var->notify_all();
+    }
+    while(message != "EXIT_SUCCESS");
+    
+    //проверить счетчик запущенных экземпляров и если 0, то сделать remove
+    std::atomic<int> counter_of_examples = 0; //надо как-то грамотно его вписать в ход программы...
+    if (counter_of_examples == 0)
+    {
+        shared_memory_object::remove(shared_memory_name.c_str());
+    }
 }
 
-void output_thread()
+void cout_thread()
 {
     
 }
 
 int main(int argc, const char * argv[])
 {
-    using allocator = boost::interprocess::allocator < char,
-        boost::interprocess::managed_shared_memory::segment_manager > ;
-
-    using string = boost::interprocess::basic_string < char,
-        std::char_traits < char >, allocator> ;
+    using namespace boost::interprocess;
+ 
+    typedef allocator<char, managed_shared_memory::segment_manager> CharAllocator;
+    typedef basic_string<char, std::char_traits<char>, CharAllocator> MyShmString;
+    typedef allocator<MyShmString, managed_shared_memory::segment_manager> StringAllocator;
+    typedef vector<MyShmString, StringAllocator> MyShmStringVector;
     
     const std::string shared_memory_name = "managed_shared_memory";
 
-    boost::interprocess::shared_memory_object::remove(shared_memory_name.c_str());
+    shared_memory_object::remove(shared_memory_name.c_str());
 
-    boost::interprocess::managed_shared_memory shared_memory(
-        boost::interprocess::open_or_create, shared_memory_name.c_str(), 1024);
+    managed_shared_memory shared_memory(open_or_create, shared_memory_name.c_str(), 10000);
     
     //Здесь должен быть цикл для обмена сообщениями
 
-    boost::interprocess::shared_memory_object::remove(shared_memory_name.c_str());
+    shared_memory_object::remove(shared_memory_name.c_str());
     
     return 0;
 }
