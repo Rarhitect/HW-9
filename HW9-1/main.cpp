@@ -5,6 +5,7 @@
 //  Created by Alyaev Roman on 05.04.2021.
 //
 
+#include <filesystem>
 #include <iostream>
 #include <thread>
 #include <string>
@@ -22,6 +23,8 @@
 
 void cin_thread()
 {
+    static std::atomic<int> counter_of_examples = 0;
+    
     using namespace boost::interprocess;
  
     typedef allocator < char, managed_shared_memory::segment_manager > CharAllocator;
@@ -45,6 +48,8 @@ void cin_thread()
     MyShmString message(charallocator);
     message = "EXIT_SUCCES";
     
+    counter_of_examples++;
+    
     do
     {
         std::cin >> message;
@@ -57,8 +62,8 @@ void cin_thread()
     }
     while(message != "EXIT_SUCCESS");
     
-    //проверить счетчик запущенных экземпляров и если 0, то сделать remove
-    std::atomic<int> counter_of_examples = 0; //надо как-то грамотно его вписать в ход программы...
+    counter_of_examples--;
+    
     if (counter_of_examples == 0)
     {
         shared_memory_object::remove(shared_memory_name.c_str());
@@ -106,22 +111,11 @@ void cout_thread()
 
 int main(int argc, const char * argv[])
 {
-    using namespace boost::interprocess;
- 
-    typedef allocator<char, managed_shared_memory::segment_manager> CharAllocator;
-    typedef basic_string<char, std::char_traits<char>, CharAllocator> MyShmString;
-    typedef allocator<MyShmString, managed_shared_memory::segment_manager> StringAllocator;
-    typedef vector<MyShmString, StringAllocator> MyShmStringVector;
+    std::thread input_thread(cin_thread);
+    std::thread output_thread(cout_thread);
     
-    const std::string shared_memory_name = "managed_shared_memory";
-
-    shared_memory_object::remove(shared_memory_name.c_str());
-
-    managed_shared_memory shared_memory(open_or_create, shared_memory_name.c_str(), 10000);
-    
-    //Здесь должен быть цикл для обмена сообщениями
-
-    shared_memory_object::remove(shared_memory_name.c_str());
+    input_thread.join();
+    output_thread.join();
     
     return 0;
 }
