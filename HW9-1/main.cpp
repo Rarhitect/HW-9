@@ -48,7 +48,7 @@ public:
 
         m_local_messages = 0;
 
-        (*m_users)++;
+        m_users += 1;
     }
 
     ~Chat() noexcept = default;
@@ -125,11 +125,15 @@ private:
 
     void write()
     {
-        std::string message;
+        std::string message = "/exit";
         
-        std::cin >> message;
-        
-        send_message(message);
+        do
+        {
+            std::cin >> message;
+            
+            send_message(message);
+        }
+        while(message != "/exit");
     }
 
 private:
