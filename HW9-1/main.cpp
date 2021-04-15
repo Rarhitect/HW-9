@@ -48,7 +48,7 @@ public:
 
         m_local_messages = 0;
 
-        m_users += 1;
+        (*m_users)++;
     }
 
     ~Chat() noexcept = default;
