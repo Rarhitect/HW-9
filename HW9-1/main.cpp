@@ -40,11 +40,11 @@ public:
     explicit Chat(const std::string & user_name) : m_user_name(user_name), m_exit_flag(false),
         m_shared_memory(open_or_create, shared_memory_name.c_str(), 10000 * sizeof(char))
     {
-        m_vector    = m_shared_memory.construct < vector_t > ("vector_t")(m_shared_memory.get_segment_manager());
-        m_mutex     = m_shared_memory.construct < mutex_t > ("m_mutex")();
-        m_condition = m_shared_memory.construct < condition_t > ("m_condition")();
-        m_users     = 0;
-        m_messages  = 0;
+        m_vector    = m_shared_memory.find_or_construct < vector_t > ("vector_t")(m_shared_memory.get_segment_manager());
+        m_mutex     = m_shared_memory.find_or_construct < mutex_t > ("m_mutex")();
+        m_condition = m_shared_memory.find_or_construct < condition_t > ("m_condition")();
+        m_users     = m_shared_memory.find_or_construct < counter_t > ("m_users")(0);
+        m_messages  = m_shared_memory.find_or_construct < counter_t > ("m_messages")(0);
 
         m_local_messages = 0;
 
