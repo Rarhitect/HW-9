@@ -129,7 +129,7 @@ private:
         
         do
         {
-            std::cin >> message;
+            std::getline(std::cin, message); 
             
             send_message(message);
         }
