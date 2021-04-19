@@ -51,7 +51,10 @@ public:
         (*m_users)++;
     }
 
-    ~Chat() noexcept = default;
+    ~Chat()
+    {
+        *(m_users)--;
+    }
 
 public:
 
@@ -87,7 +90,7 @@ private:
         {
             std::unique_lock < mutex_t > lock(*m_mutex);
 
-            m_condition->wait(lock, [this]() { return !this->m_vector->empty(); });
+            m_condition->wait(lock, [this]() { return !(m_local_messages == *m_messages); });
 
             if (m_exit_flag)
             {
@@ -96,7 +99,7 @@ private:
 
             std::cout << m_vector->back() << std::endl;
 
-            m_vector->pop_back();
+            m_local_messages++;
         }
     }
 
@@ -114,7 +117,7 @@ private:
     {
         std::scoped_lock < mutex_t > lock(*m_mutex);
 
-        m_vector->push_back(string_t(message.c_str(), m_shared_memory.get_segment_manager()));
+        m_vector->push_back(string_t((m_user_name + ": " + message).c_str(), m_shared_memory.get_segment_manager()));
 
         m_condition->notify_all();
 
@@ -125,15 +128,19 @@ private:
 
     void write()
     {
-        std::string message = "/exit";
+        std::string message = "0";
         
-        do
+        while(true)
         {
-            std::getline(std::cin, message); 
+            std::getline(std::cin, message);
+            
+            if(message == "/EXIT")
+            {
+                break;
+            }
             
             send_message(message);
         }
-        while(message != "/exit");
     }
 
 private:
