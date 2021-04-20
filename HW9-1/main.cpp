@@ -12,6 +12,8 @@
 #include <thread>
 #include <utility>
 
+#define BOOST_DATE_TIME_NO_LIB
+
 #include <boost/interprocess/containers/string.hpp>
 #include <boost/interprocess/containers/vector.hpp>
 #include <boost/interprocess/managed_shared_memory.hpp>
@@ -25,35 +27,40 @@ class Chat
 {
 private:
 
-    using shared_memory_t = managed_shared_memory;
-    using manager_t = managed_shared_memory::segment_manager;
-    using string_allocator_t = allocator < char, manager_t >;
-    using string_t = basic_string < char, std::char_traits<char>, string_allocator_t >;
-    using vector_allocator_t = allocator < string_t, manager_t >;
-    using vector_t = vector < string_t, vector_allocator_t >;
-    using mutex_t = interprocess_mutex;
-    using condition_t = interprocess_condition;
-    using counter_t = std::atomic < std::size_t > ;
+    using shared_memory_t    = managed_shared_memory ;
+    using manager_t          = managed_shared_memory::segment_manager ;
+    using string_allocator_t = allocator < char, manager_t > ;
+    using string_t           = basic_string < char, std::char_traits < char >, string_allocator_t > ;
+    using vector_allocator_t = allocator < string_t, manager_t > ;
+    using vector_t           = vector < string_t, vector_allocator_t > ;
+    using mutex_t            = interprocess_mutex ;
+    using condition_t        = interprocess_condition ;
+    using counter_t          = std::atomic < std::size_t > ;
 
 public:
 
     explicit Chat(const std::string & user_name) : m_user_name(user_name), m_exit_flag(false),
-        m_shared_memory(open_or_create, shared_memory_name.c_str(), 10000 * sizeof(char))
+        m_shared_memory(boost::interprocess::open_or_create, shared_memory_name.c_str(), 10000 * sizeof(char))
     {
-        m_vector    = m_shared_memory.find_or_construct < vector_t > ("vector_t")(m_shared_memory.get_segment_manager());
-        m_mutex     = m_shared_memory.find_or_construct < mutex_t > ("m_mutex")();
-        m_condition = m_shared_memory.find_or_construct < condition_t > ("m_condition")();
-        m_users     = m_shared_memory.find_or_construct < counter_t > ("m_users")(0);
-        m_messages  = m_shared_memory.find_or_construct < counter_t > ("m_messages")(0);
+        m_vector    = m_shared_memory.find_or_construct < vector_t >    ("vector")(m_shared_memory.get_segment_manager());
+        m_mutex     = m_shared_memory.find_or_construct < mutex_t >     ("mutex")();
+        m_condition = m_shared_memory.find_or_construct < condition_t > ("condition")();
+        m_users     = m_shared_memory.find_or_construct < counter_t >   ("users")(0);
+        m_messages  = m_shared_memory.find_or_construct < counter_t >   ("messages")(0);
 
         m_local_messages = 0;
-
+       
         (*m_users)++;
     }
 
-    ~Chat()
+    ~Chat() noexcept
     {
-        *(m_users)--;
+        if (!(--(*m_users)))
+        {
+            boost::interprocess::shared_memory_object::remove(shared_memory_name.c_str());
+        }
+
+        (*m_users)--;
     }
 
 public:
@@ -63,19 +70,14 @@ public:
         auto reader = std::thread(&Chat::read, this);
 
         write();
-        
+
         m_exit_flag = true;
-        
+
         m_condition->notify_all();
 
         reader.join();
 
         send_message(m_user_name + " left the chat");
-
-        if (!(--(*m_users)))
-        {
-            shared_memory_object::remove(shared_memory_name.c_str());
-        }
     }
 
 private:
@@ -105,7 +107,7 @@ private:
 
     void show_history()
     {
-        std::scoped_lock< mutex_t > lock(*m_mutex);
+        std::unique_lock < mutex_t > lock(*m_mutex);
 
         for (const auto & message : *m_vector)
         {
@@ -115,37 +117,39 @@ private:
 
     void send_message(const std::string & message)
     {
-        std::scoped_lock < mutex_t > lock(*m_mutex);
+        std::unique_lock < mutex_t > lock(*m_mutex);
 
         m_vector->push_back(string_t((m_user_name + ": " + message).c_str(), m_shared_memory.get_segment_manager()));
 
         m_condition->notify_all();
 
-        (*m_messages)++;
-
         m_local_messages++;
+
+        (*m_messages)++;
     }
 
     void write()
     {
-        std::string message = "0";
-        
-        while(true)
+        std::string message;
+
+        while (true)
         {
             std::getline(std::cin, message);
-            
-            if(message == "/EXIT")
+
+            if (message == "/exit")
             {
+                m_local_messages++;
+
                 break;
             }
-            
+
             send_message(message);
         }
     }
 
 private:
 
-    static inline const std::string shared_memory_name = "shared_memory";
+    const std::string shared_memory_name = "shared_memory";
 
 private:
 
